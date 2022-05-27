@@ -324,7 +324,7 @@ class Parameter:
                             help="fix the rnn memory length to rnn_fix_length")
         self.register_param('rnn_fix_length')
 
-        self.ep_start_num = 0
+        self.ep_start_num = 150000
         parser.add_argument('--ep_start_num', type=int, default=self.ep_start_num, metavar='N',
                             help="only when the size of the replay buffer is larger than ep_start_num"
                                  ", ep can be learned")
@@ -355,7 +355,7 @@ class Parameter:
                             help="smooth  factor for ep module, 0.0 for apply concurrently")
         self.register_param('ep_smooth_factor')
 
-        self.rbf_radius = 3000.0
+        self.rbf_radius = 80.0
         parser.add_argument('--rbf_radius', type=float, default=self.rbf_radius, metavar='N',
                             help="radius of the rbf kerel")
         self.register_param('rbf_radius')

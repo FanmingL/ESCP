@@ -118,6 +118,7 @@ def get_rbf_matrix(data, centers, alpha):
     data = data.unsqueeze(1).expand(out_shape)
     centers = centers.unsqueeze(0).expand(out_shape)
     mtx = (-(centers - data).pow(2) * alpha).sum(dim=-1, keepdim=False).exp()
+    # mtx = (-(centers - data).pow(2) * alpha).exp().mean(dim=-1, keepdim=False)
     # mtx = mtx.clamp_min(mtx.min().item() * 1)
     return mtx
 
