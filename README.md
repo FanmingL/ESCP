@@ -9,8 +9,8 @@ pip install -r ./requirement.txt
 ```
 Note: You can follow the instructions at [here](https://github.com/openai/mujoco-py) to properly install `mujoco-py`.
 
-### use a docker image
-we have built  a docker image, where we ran all the experiments in the paper. The docker image can be pulled from [DockerHub](https://hub.docker.com/repository/docker/sanluosizhou/selfdl).
+### Use a docker image
+we have built  a docker image, with which we ran all the experiments in the paper. The docker image can be pulled from [DockerHub](https://hub.docker.com/repository/docker/sanluosizhou/selfdl).
 ```bash
 docker pull sanluosizhou/selfdl:ml
 ```
