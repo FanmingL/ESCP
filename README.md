@@ -5,7 +5,7 @@ Code for [Adapt to Environment Sudden Changes by Learning a Context Sensitive Po
 
 Install the required python packages in `requirement.txt` by
 ```bash
-pip install -r ./requirement
+pip install -r ./requirement.txt
 ```
 Note: You can follow the instructions at [here](https://github.com/openai/mujoco-py) to properly install `mujoco-py`.
 
