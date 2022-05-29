@@ -280,10 +280,6 @@ class Parameter:
                             help="maximum gradient of policy")
         self.register_param('policy_max_gradient')
 
-        self.minimal_repre_rp_size = 0
-        parser.add_argument('--minimal_repre_rp_size', type=float, default=self.minimal_repre_rp_size, metavar='N',
-                            help="after minimal_repre_rp_size, start training EP module")
-        self.register_param('minimal_repre_rp_size')
 
         self.use_rmdm = False
         parser.add_argument('--use_rmdm', action='store_true',
@@ -324,11 +320,24 @@ class Parameter:
                             help="fix the rnn memory length to rnn_fix_length")
         self.register_param('rnn_fix_length')
 
-        self.ep_start_num = 150000
+
+        self.minimal_repre_rp_size = 1e5
+        parser.add_argument('--minimal_repre_rp_size', type=float, default=self.minimal_repre_rp_size, metavar='N',
+                            help="after minimal_repre_rp_size, start training EP module")
+        self.register_param('minimal_repre_rp_size')
+
+
+        # self.ep_start_num = 150000
+        self.ep_start_num = 0
         parser.add_argument('--ep_start_num', type=int, default=self.ep_start_num, metavar='N',
                             help="only when the size of the replay buffer is larger than ep_start_num"
                                  ", ep can be learned")
         self.register_param('ep_start_num')
+
+        self.kernel_type = 'rbf_element_wise'
+        parser.add_argument('--kernel_type', default=self.kernel_type, metavar='G',
+                            help='kernel type for DPP loss computing (rbf/rbf_element_wise/inner)')
+        self.register_param('kernel_type')
 
         self.rmdm_ratio = 1.0
         parser.add_argument('--rmdm_ratio', type=float, default=self.rmdm_ratio, metavar='N',
@@ -371,7 +380,7 @@ class Parameter:
                             help="environment OOD change range")
         self.register_param('env_ood_change_range')
 
-        self.consistency_loss_weight = 100.0
+        self.consistency_loss_weight = 50.0
         parser.add_argument('--consistency_loss_weight', type=float, default=self.consistency_loss_weight, metavar='N',
                             help="loss ratio of the consistency loss")
         self.register_param('consistency_loss_weight')

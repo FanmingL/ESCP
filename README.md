@@ -33,3 +33,10 @@ There are several key parameters:
 - `--task_num`: configures how many environments are used for policy training (it should be set to `12` in `GridWorldPlat-v2`).
 - `--test_task_num`: configures how many environments are used for policy testing (it should be set to `12` in `GridWorldPlat-v2`).
 - `--varying_params`: configures what kinds of environment changes are used, refer to [code](envs/nonstationary_env.py) for all kinds of supported environment changes.
+
+You can conduct the experiment in `HalfCheetah-v2` with both `gravity` and `dof_damping` changed.
+
+```bash
+python main.py --env_name HalfCheetah-v2 --rnn_fix_length 16 --seed 5  --task_num 40 --max_iter_num 2000 --varying_params dof_damping_1_dim  gravity  --test_task_num 40 --ep_dim 2 --name_suffix RMDM_more_change --kernel_type rbf  --use_rmdm  --stop_pg_for_ep  --bottle_neck 
+```
+

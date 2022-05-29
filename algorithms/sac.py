@@ -4,7 +4,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from log_util.logger import Logger
 from models.policy import Policy
 from models.value import Value
-from models.transition import Trainsition
 from parameter.private_config import *
 from agent.Agent import EnvRemoteArray
 from envs.nonstationary_env import NonstationaryEnv
@@ -32,8 +31,6 @@ class SAC:
         self.parameter = self.logger.parameter
         self.policy_config = Policy.make_config_from_param(self.parameter)
         self.value_config = Value.make_config_from_param(self.parameter)
-        self.transition_config = Trainsition.make_config_from_param(self.parameter)
-        self.transition_config['stop_pg_for_ep'] = False
         self.env = NonstationaryEnv(gym.make(self.parameter.env_name), log_scale_limit=self.parameter.env_default_change_range,
                                     rand_params=self.parameter.varying_params)
         self.ood_env = NonstationaryEnv(gym.make(self.parameter.env_name), log_scale_limit=self.parameter.env_ood_change_range,
@@ -94,12 +91,10 @@ class SAC:
             self.value_config['ep_dim'] = self.training_agent.env_parameter_len
         self.policy_config['logger'] = self.logger
         self.value_config['logger'] = self.logger
-        self.transition_config['logger'] = self.logger
         self.loaded_pretrain = not self.parameter.ep_pretrain_path_suffix == 'None'
         self.freeze_ep = False
         self.policy_config['freeze_ep'] = self.freeze_ep
         self.value_config['freeze_ep'] = self.freeze_ep
-        self.transition_config['freeze_ep'] = self.freeze_ep
         self.obs_dim = self.training_agent.obs_dim
         self.act_dim = self.training_agent.act_dim
         self.policy = Policy(self.training_agent.obs_dim, self.training_agent.act_dim, **self.policy_config)
@@ -139,14 +134,9 @@ class SAC:
         self.alpha_optimizer = torch.optim.Adam([self.log_sac_alpha], lr=1e-2)
         self.rmdm_loss = RMDMLoss(max_env_len=self.parameter.task_num, tau=self.parameter.rmdm_tau)
         to_device(self.device, self.policy, self.policy_for_test, self.value1, self.value2, self.target_value1, self.target_value2)
-        if self.parameter.transition_learn_aux:
-            self.transition = Trainsition(self.training_agent.obs_dim, self.training_agent.act_dim, **self.transition_config)
-            self.transition_optimizer = torch.optim.Adam([*self.transition.parameters(True)],
-                                                         lr=self.parameter.learning_rate)
-            to_device(self.device, self.transition)
-        else:
-            self.transition = None
-            self.transition_optimizer = None
+
+        self.transition = None
+        self.transition_optimizer = None
         if self.parameter.use_contrastive:
             self.contrastive_loss = ContrastiveLoss(self.parameter.ep_dim, self.parameter.task_num, ep=self.policy_target.ep)
             to_device(self.device, self.contrastive_loss)
@@ -301,11 +291,13 @@ class SAC:
                 rmdm_loss_tensor, consistency_loss, diverse_loss, batch_task_num, consis_w_loss, diverse_w_loss, \
                     all_repre, all_valids = self.rmdm_loss.rmdm_loss_timing(ep, task, valid, consis_w, diverse_w,
                                                                             True, True,
-                                                                            rbf_radius=self.parameter.rbf_radius,)
+                                                                            rbf_radius=self.parameter.rbf_radius,
+                                                                            kernel_type=self.parameter.kernel_type)
             else:
                 rmdm_loss_tensor, consistency_loss, diverse_loss, batch_task_num, consis_w_loss, diverse_w_loss, \
                     all_repre, all_valids = self.rmdm_loss.rmdm_loss(ep, task, valid, consis_w, diverse_w, True,
-                                                                        True, rbf_radius=self.parameter.rbf_radius)
+                                                                        True, rbf_radius=self.parameter.rbf_radius,
+                                                                            kernel_type=self.parameter.kernel_type)
             self.all_repre = [item.detach() for item in all_repre]
             self.all_valids = [item.detach() for item in all_valids]
             self.all_tasks = self.rmdm_loss.lst_tasks
@@ -343,17 +335,6 @@ class SAC:
             actor_loss = actor_loss + uposi_loss
             pass
         transition_loss = None
-        if self.parameter.transition_learn_aux and not self.parameter.share_ep and not self.freeze_ep:
-            if self.parameter.rnn_fix_length:
-                ep = ep[..., -1:, :]
-                transition_loss = (self.transition.forward(state[:, -1:, :], last_action[:, -1:, :], action[:, -1:, :],
-                                           transition_hidden, ep_out=ep[:, -1:, :])[0] - next_state).pow(2).mean()
-            else:
-                transition_loss = ((self.transition.forward(state, last_action, action, transition_hidden, ep_out=ep)[0]
-                                    - next_state).pow(2) * valid).sum() / valid_num
-
-            actor_loss = actor_loss + transition_loss
-            pass
         contrastive_loss = None
         if self.parameter.use_contrastive and not self.parameter.share_ep and not self.freeze_ep:
             if self.parameter.rnn_fix_length:
@@ -362,8 +343,6 @@ class SAC:
                 actor_loss = actor_loss + contrastive_loss
         self.timer.register_point('policy_optimization', level=3)     # (TIME: 0.026)
         self.policy_optimizer.zero_grad()
-        if self.parameter.transition_learn_aux:
-            self.transition_optimizer.zero_grad()
         if torch.isnan(actor_loss).any().item():
             self.logger.log(f"nan found in actor loss, state: {state.abs().sum()}, "
                             f"last action: {last_action.abs().sum()}, "
@@ -371,8 +350,6 @@ class SAC:
             return None
         actor_loss.backward()
         self.policy_optimizer.step()
-        if self.parameter.transition_learn_aux:
-            self.transition_optimizer.step()
         if self.parameter.ep_smooth_factor > 0:
             self.policy.apply_temp_ep(self.parameter.ep_smooth_factor)
         self.timer.register_end(level=3)
@@ -467,9 +444,6 @@ class SAC:
                                                                       slice_num=self.parameter.rnn_slice_num)
                     hidden_value2 = self.value2.generate_hidden_state(states, last_action, actions,
                                                                       slice_num=self.parameter.rnn_slice_num)
-                    if self.parameter.transition_learn_aux:
-                        hidden_transition = self.transition.generate_hidden_state(states, last_action, actions,
-                                                                                  slice_num=self.parameter.rnn_slice_num)
                     self.timer.register_point('Policy.slice_tensor', level=4)
                     states, next_states, actions, last_action, rewards, masks, valid, task, env_param = \
                         map(Policy.slice_tensor, [states, next_states, actions, last_action, rewards, masks, valid, task, env_param],
@@ -500,11 +474,6 @@ class SAC:
                         map(lambda x: x[total_inds],
                             [states, next_states, actions, last_action, rewards, masks, valid, task, env_param])
                     self.timer.register_end(level=4)
-                    if self.parameter.transition_learn_aux:
-
-                        hidden_transition = Policy.hidden_state_mask(hidden_transition, mask_for_valid)
-                        hidden_transition = Policy.hidden_state_sample(hidden_transition, total_inds)
-
                 else:
                     self.timer.register_point('Policy.slice_tensor', level=4)     # (TIME: 0.132)
                     # states, next_states, actions, last_action, rewards, masks, valid, task = \
@@ -519,8 +488,6 @@ class SAC:
                     hidden_policy = self.policy.make_init_state(batch_size=states.shape[0], device=states.device)
                     hidden_value1 = self.value1.make_init_state(batch_size=states.shape[0], device=states.device)
                     hidden_value2 = self.value2.make_init_state(batch_size=states.shape[0], device=states.device)
-                    if self.parameter.transition_learn_aux:
-                        hidden_transition = self.transition.make_init_state(batch_size=states.shape[0], device=states.device)
                     self.timer.register_end(level=4)
                 self.timer.register_end(level=3)
             else:
@@ -537,8 +504,6 @@ class SAC:
                 Policy.hidden_detach,
                 [hidden_policy, hidden_value1, hidden_value2]
             )
-            if self.parameter.transition_learn_aux:
-                hidden_transition = Policy.hidden_detach(hidden_transition)
             with torch.set_grad_enabled(True):
                 if FC_MODE:
                     self.timer.register_point('self.sac_update', level=1)
@@ -574,10 +539,7 @@ class SAC:
                                 [hidden_policy, hidden_value1, hidden_value2],
                                 [start] * 3,
                                 [end] * 3)
-                        if self.parameter.transition_learn_aux:
-                            hidden_transition_batch = Policy.hidden_state_slice(hidden_transition, start, end)
-                        else:
-                            hidden_transition_batch = None
+                        hidden_transition_batch = None
                         self.timer.register_point('self.sac_update', level=1)     # (TIME: 0.091)
                         can_optimize_ep = self.replay_buffer.size > self.parameter.ep_start_num
                         res_dict = self.sac_update(states_batch, actions_batch, next_states_batch, rewards_batch,

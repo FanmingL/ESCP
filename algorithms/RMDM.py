@@ -113,25 +113,28 @@ class constraint:
         return constraint_loss, consistency_loss, diverse_loss
 
 
-def get_rbf_matrix(data, centers, alpha):
+def get_rbf_matrix(data, centers, alpha, element_wise_exp=False):
     out_shape = torch.Size([data.shape[0], centers.shape[0], data.shape[-1]])
     data = data.unsqueeze(1).expand(out_shape)
     centers = centers.unsqueeze(0).expand(out_shape)
-    mtx = (-(centers - data).pow(2) * alpha).sum(dim=-1, keepdim=False).exp()
-    # mtx = (-(centers - data).pow(2) * alpha).exp().mean(dim=-1, keepdim=False)
-    # mtx = mtx.clamp_min(mtx.min().item() * 1)
+    if element_wise_exp:
+        mtx = (-(centers - data).pow(2) * alpha).exp().mean(dim=-1, keepdim=False)
+    else:
+        mtx = (-(centers - data).pow(2) * alpha).sum(dim=-1, keepdim=False).exp()
     return mtx
 
 
 def get_loss_dpp(y, kernel='rbf', rbf_radius=3000.0):
     # K = (y.matmul(y.t()) - 1).exp() + torch.eye(y.shape[0]) * 1e-3
     if kernel == 'rbf':
-        K = get_rbf_matrix(y, y, alpha=rbf_radius) + torch.eye(y.shape[0], device=y.device) * 1e-5
+        K = get_rbf_matrix(y, y, alpha=rbf_radius, element_wise_exp=False) + torch.eye(y.shape[0], device=y.device) * 1e-3
+    elif kernel == 'rbf_element_wise':
+        K = get_rbf_matrix(y, y, alpha=rbf_radius, element_wise_exp=False) + torch.eye(y.shape[0], device=y.device) * 1e-3
     elif kernel == 'inner':
         # y = y / y.pow(2).sum(dim=-1, keepdim=True).sqrt()
         K = y.matmul(y.t()).exp()
         # K = torch.softmax(K, dim=0)
-        K = K + torch.eye(y.shape[0], device=y.device) * 1e-4
+        K = K + torch.eye(y.shape[0], device=y.device) * 1e-3
         print(K)
         # print('k shape: ', K.shape, ', y_mtx shape: ', y_mtx.shape)
     else:
@@ -176,7 +179,9 @@ class RMDMLoss:
                 rmdm_loss_it = consis_w * consistency_loss
         return rmdm_loss_it, consis_w_loss, divers_w_loss
 
-    def rmdm_loss(self, predicted_env_vector, tasks, valid, consis_w, diverse_w, need_all_repre=False, need_parameter_loss=False, rbf_radius=3000.0):
+    def rmdm_loss(self, predicted_env_vector, tasks, valid, consis_w, diverse_w, need_all_repre=False,
+                  need_parameter_loss=False, rbf_radius=3000.0,
+                         kernel_type='rbf'):
         tasks = torch.max(tasks[..., 0, 0], tasks[..., -1, 0])
         all_tasks = torch.unique(tasks).detach().cpu().numpy().tolist()
         if len(all_tasks) <= 1:
@@ -237,7 +242,7 @@ class RMDMLoss:
             if item not in all_tasks:
                 repres.append(self.mean_vector[item].reshape(1, -1))
         repre_tensor = torch.cat(repres, 0)
-        dpp_loss = get_loss_dpp(repre_tensor, rbf_radius=rbf_radius)
+        dpp_loss = get_loss_dpp(repre_tensor, rbf_radius=rbf_radius, kernel=kernel_type)
         rmdm_loss_it, consis_w_loss, diverse_w_loss = self.construct_loss(consistency_loss, dpp_loss, consis_w, diverse_w, stds.item())
         # rmdm_loss_it = dpp_loss + consistency_loss
         # print(consistency_loss, dpp_loss)
@@ -252,7 +257,8 @@ class RMDMLoss:
 
     def rmdm_loss_timing(self, predicted_env_vector, tasks, valid,
                          consis_w, diverse_w, need_all_repre=False,
-                         need_parameter_loss=False, cum_time=[], rbf_radius=3000.0):
+                         need_parameter_loss=False, cum_time=[], rbf_radius=3000.0,
+                         kernel_type='rbf'):
         if self.current_env_mean is None:
             self.current_env_mean = torch.zeros((self.max_env_len, 1, predicted_env_vector.shape[-1]), device=predicted_env_vector.device)
             self.history_env_mean = torch.zeros((self.max_env_len, 1, predicted_env_vector.shape[-1]), device=predicted_env_vector.device)
@@ -324,7 +330,7 @@ class RMDMLoss:
             if item not in task_set:
                 repres.append(self.history_env_mean[int(item-1)])
         repre_tensor = torch.cat(repres, 0)
-        dpp_loss = get_loss_dpp(repre_tensor, rbf_radius=rbf_radius)
+        dpp_loss = get_loss_dpp(repre_tensor, kernel=kernel_type, rbf_radius=rbf_radius)
         ##### consistency loss
         # total minus outter
         if not use_history_mean:
