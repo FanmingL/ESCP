@@ -129,7 +129,7 @@ def get_loss_dpp(y, kernel='rbf', rbf_radius=3000.0):
     if kernel == 'rbf':
         K = get_rbf_matrix(y, y, alpha=rbf_radius, element_wise_exp=False) + torch.eye(y.shape[0], device=y.device) * 1e-3
     elif kernel == 'rbf_element_wise':
-        K = get_rbf_matrix(y, y, alpha=rbf_radius, element_wise_exp=False) + torch.eye(y.shape[0], device=y.device) * 1e-3
+        K = get_rbf_matrix(y, y, alpha=rbf_radius, element_wise_exp=True) + torch.eye(y.shape[0], device=y.device) * 1e-3
     elif kernel == 'inner':
         # y = y / y.pow(2).sum(dim=-1, keepdim=True).sqrt()
         K = y.matmul(y.t()).exp()
