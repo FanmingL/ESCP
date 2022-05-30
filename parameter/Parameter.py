@@ -13,8 +13,8 @@ class Parameter:
         self.experiment_target = EXPERIMENT_TARGET
         self.DEFAULT_CONFIGS = global_configs()
         self.arg_names = []
-        self.host_name = socket.gethostname()
-        self.ip = socket.gethostbyname(self.host_name)
+        self.host_name = 'localhost'
+        self.ip = '127.0.0.1'
         self.exec_time = datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
         self.commit_id = self.get_commit_id()
         self.log_func = None
