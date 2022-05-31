@@ -153,7 +153,7 @@ class SAC:
                                                       ) * np.log(self.parameter.consistency_loss_weight)).to(self.device).requires_grad_(
             True)
         self.log_diverse_w_alpha = (torch.ones((1)).to(torch.get_default_dtype()
-                                                       ) * np.log(1.0)).to(self.device).requires_grad_(
+                                                       ) * np.log(self.parameter.diversity_loss_weight)).to(self.device).requires_grad_(
             True)
         self.repre_loss_factor = self.parameter.repre_loss_factor
         self.w_optimizer = torch.optim.SGD([self.log_consis_w_alpha, self.log_diverse_w_alpha], lr=1e-1)

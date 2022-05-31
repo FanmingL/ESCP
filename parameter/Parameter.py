@@ -385,6 +385,11 @@ class Parameter:
                             help="loss ratio of the consistency loss")
         self.register_param('consistency_loss_weight')
 
+        self.diversity_loss_weight = 0.004
+        parser.add_argument('--diversity_loss_weight', type=float, default=self.diversity_loss_weight, metavar='N',
+                            help="loss ratio of the DPP loss")
+        self.register_param('diversity_loss_weight')
+
         self.varying_params = ['gravity', 'body_mass']
         parser.add_argument('--varying_params', nargs='+', type=str, default=self.varying_params)
         self.register_param('varying_params')
