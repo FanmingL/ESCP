@@ -37,6 +37,6 @@ There are several key parameters:
 You can conduct the experiment in `HalfCheetah-v2` with both `gravity` and `dof_damping` changed.
 
 ```bash
-python main.py --env_name HalfCheetah-v2 --rnn_fix_length 16 --seed 5  --task_num 40 --max_iter_num 2000 --varying_params dof_damping_1_dim  gravity  --test_task_num 40 --ep_dim 2 --name_suffix RMDM_more_change --kernel_type rbf --rbf_radius 80  --use_rmdm  --stop_pg_for_ep  --bottle_neck 
+python main.py --env_name HalfCheetah-v2 --rnn_fix_length 16 --seed 5  --task_num 40 --max_iter_num 2000 --varying_params dof_damping_1_dim  gravity  --test_task_num 40 --ep_dim 2 --name_suffix RMDM_more_change --kernel_type rbf --rbf_radius 80 --diversity_loss_weight 1.0  --use_rmdm  --stop_pg_for_ep  --bottle_neck 
 ```
 
